@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as fs from "fs";
 
-const chunkSize = 102400;
+const chunkSize = 512_000;
 
 const server = http.createServer(function (req, res) {
   console.log(req.url);
@@ -23,30 +23,38 @@ const server = http.createServer(function (req, res) {
       console.log("req.headers.range: ", req.headers.range);
 
       const fileName = "/cat-movie.mp4";
-      //   const fileName = "/React_Rotterdam_Jan_2020_Maurice.mp4";
 
       const stat = fs.statSync(__dirname + fileName);
       const fileSize = stat.size;
       console.log("fileSize", fileSize);
 
-      const re = /bytes=(\d+)-(\d*)/.exec(req.headers.range);
-      const start = +(re?.[1] ?? 0);
-      const end = Math.min(+(re?.[2] || start + chunkSize), fileSize - 1);
-      console.log("range", start, end);
+      if (req.headers.range) {
+        const re = /bytes=(\d+)-(\d*)/.exec(req.headers.range);
+        const start = +(re?.[1] ?? 0);
+        const end = Math.min(+(re?.[2] || start + chunkSize), fileSize);
+        console.log("range", start, end);
 
-      res.writeHead(206, {
-        "Accept-Ranges": "bytes",
-        "Content-Length": start === end ? 0 : end - start + 1,
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Content-Type": "video/mp4",
-        "cache-control": "no-cache",
-      });
+        res.writeHead(206, {
+          "Accept-Ranges": "bytes",
+          "Content-Length": end - start,
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Content-Type": "video/mp4",
+          "cache-control": "no-cache",
+        });
 
-      fs.createReadStream(__dirname + fileName, {
-        start,
-        end,
-      }).pipe(res);
+        fs.createReadStream(__dirname + fileName, {
+          start,
+          end,
+        }).pipe(res);
+      } else {
+        res.writeHead(200, {
+          "Content-Type": "video/mp4",
+          "Content-Length": fileSize,
+          "cache-control": "no-cache",
+        });
 
+        fs.createReadStream(__dirname + fileName).pipe(res);
+      }
       break;
 
     default:
